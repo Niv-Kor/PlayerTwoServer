@@ -6,14 +6,14 @@ import math.RNG;
 public class PortGenerator
 {
 	public static enum AllocatedPorts {
-		GENERAL_SERVICE,
-		CLIENT_FINDER,
-		LAUNCHER_APPLICANT;
+		GENERAL_SERVICE(1024),
+		CLIENT_FINDER(1025),
+		LAUNCHER_APPLICANT(1026);
 		
 		private int port;
 		
-		private AllocatedPorts() {
-			port = nextPort();
+		private AllocatedPorts(int port) {
+			this.port = port;
 		}
 		
 		/**
@@ -22,7 +22,7 @@ public class PortGenerator
 		public int getPort() { return port; }
 	}
 	
-	private static final int MIN_PORT = 1024;
+	private static final int MIN_PORT = 1027;
 	private static final int MAX_PORT = (int) Character.MAX_VALUE;
 	
 	/**

@@ -1,6 +1,7 @@
 package com.hit.server_side.connection;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import com.hit.server_side.game_controlling.ServerSideController;
@@ -23,6 +24,7 @@ public class ClientFinder extends Thread
 		while(!interrupted()) {
 			try {
 				String[] msg = finder.receive();
+				ServerLogger.print("Client finder received message: '" + Arrays.toString(msg) + "'.");
 				
 				//the game the client is referring to
 				ServerSideGame game = ServerSideGame.valueOf(msg[1]);

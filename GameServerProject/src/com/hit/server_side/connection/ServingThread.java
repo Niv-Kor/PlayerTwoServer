@@ -1,20 +1,25 @@
 package com.hit.server_side.connection;
 import java.io.IOException;
+
+import com.hit.server_side.game_controlling.BoardGameHandler;
 import com.hit.server_side.game_controlling.ServerSideController;
 import com.hit.server_side.game_controlling.ServerSideGame;
 import game_algo.GameBoard.GameMove;
 import game_algo.IGameAlgo.GameState;
+import games.TicTacToeSmart;
 
 public class ServingThread extends Thread
 {
 	private ServerSideProtocol serverSideProtocol;
 	private int playerIndex;
 	private ServerSideGame game;
+	private BoardGameHandler gameHandler;
 	
 	public ServingThread(ServerSideGame game, int playerIndex, ServerSideProtocol serverSideProtocol) {
 		this.game = game;
 		this.playerIndex = playerIndex;
 		this.serverSideProtocol = serverSideProtocol;
+		this.gameHandler = new BoardGameHandler(new TicTacToeSmart(3, 3));
 	}
 	
 	@Override
@@ -38,9 +43,7 @@ public class ServingThread extends Thread
 						int row = Integer.parseInt(msg[1]);
 						int col = Integer.parseInt(msg[2]);
 						GameMove move = new GameMove(row, col);
-						
-						game.lastMovePlayerIndex = playerIndex;
-						game.getSmartModel().updatePlayerMove(move);
+						gameHandler.updatePlayerMove(move);
 						
 						delay();
 						
@@ -49,10 +52,9 @@ public class ServingThread extends Thread
 						break;
 					}
 					case "compmove": {
-						game.getSmartModel().calcComputerMove();
+						GameMove compMove = gameHandler.calcComputerMove(game.getComputerSign());
 						
 						//notify player 1 which move was made
-						GameMove compMove = game.anonymousMoveBuffer;
 						int row = compMove.getRow();
 						int col = compMove.getColumn();
 						
@@ -65,9 +67,7 @@ public class ServingThread extends Thread
 					case "placecomp": {
 						int row = Integer.parseInt(msg[1]);
 						int col = Integer.parseInt(msg[2]);
-						
-						char[][] cloneMatrix = game.getSmartModel().getBoardState().clone();
-						cloneMatrix[row][col] = game.getComputerSign();
+						gameHandler.place(new GameMove(row, col), game.getComputerSign());
 						
 						delay();
 						
@@ -116,7 +116,7 @@ public class ServingThread extends Thread
 	}
 	
 	public void attemptEndgame() throws IOException {
-		GameState state = game.getSmartModel().getGameState(null);
+		GameState state = gameHandler.getGameState();
 		
 		if (state != GameState.IN_PROGRESS) {
 			delay();

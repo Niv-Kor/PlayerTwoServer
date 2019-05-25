@@ -26,7 +26,6 @@ public class CLI implements Runnable
 		String command;
 		
 		while(true) {
-			ServerLogger.print("Enter command.");
 			ServerLogger.newLine();
 			command = scanner.nextLine();
 			

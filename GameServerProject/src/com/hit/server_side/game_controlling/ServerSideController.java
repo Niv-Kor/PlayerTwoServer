@@ -6,7 +6,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.hit.server_side.connection.ClientFinder;
 import com.hit.server_side.connection.GeneralService;
 import com.hit.server_side.connection.ServerLogger;
 import com.hit.server_side.connection.ServerSideProtocol;
@@ -16,16 +15,10 @@ import game_algo.IGameAlgo.GameState;
 
 public class ServerSideController
 {
-	private static ClientFinder finder;
 	private static List<ServingThread> servingThreads;
 	
 	public static void init() {
 		servingThreads = new ArrayList<ServingThread>();
-		finder = new ClientFinder();
-	}
-	
-	public static void find() {
-		finder.start();
 	}
 	
 	public static void startGame(ServerSideGame game) {
