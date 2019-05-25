@@ -1,17 +1,17 @@
 package com.hit.server_side.game_controlling;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 import com.hit.server_side.connection.GeneralService;
+import com.hit.server_side.connection.JSON;
 import com.hit.server_side.connection.ServerLogger;
-import com.hit.server_side.connection.ServerSideProtocol;
+import com.hit.server_side.connection.Protocol;
 import com.hit.server_side.connection.ServingThread;
 
-import game_algo.IGameAlgo.GameState;
+import game_algo.IGameAlgo;
 
 public class ServerSideController
 {
@@ -23,23 +23,37 @@ public class ServerSideController
 	
 	public static void startGame(ServerSideGame game) {
 		boolean gaveTurn = false;
-		String firstTurnGiver;
+		boolean firstTurnGiver;
+		IGameAlgo gameAlgo;
+		
+		try { gameAlgo = game.getSmartModel(); }
+		catch (Exception e) {
+			ServerLogger.print("Could not start a game of " + game.name() + ".");
+			e.printStackTrace();
+			return;
+		}
 		
 		for (ServingThread st : servingThreads) {
 			if (st.getGame() == game) {
+				st.setGameAlgorithm(gameAlgo);
+				
 				//give first turn to the first player in list
 				if (!gaveTurn) {
-					firstTurnGiver = "getturn";
+					firstTurnGiver = true;
 					gaveTurn = true;
 				}
-				else firstTurnGiver = "noturn";
+				else firstTurnGiver = false;
 				
-				GeneralService.notify("start:" + game.name() + ":" + firstTurnGiver + ":", st.getProtocol().getTargetPort());
+				JSON message = new JSON("start_game");
+				message.put("game", game.name());
+				message.put("turn", firstTurnGiver);
+				
+				GeneralService.notify(message, st.getProtocol().getTargetPort());
 			}
 		}
 	}
 	
-	public static void addClient(ServerSideGame game, ServerSideProtocol protocol) {
+	public static void addClient(ServerSideGame game, Protocol protocol) {
 		/*
 		 * The playerIndex variable suppose to solve the problem
 		 * where gameBoard.updatePlayerMove() does not know which of
@@ -59,7 +73,7 @@ public class ServerSideController
 		st.start();
 	}
 
-	public static ServerSideProtocol removeClient(int target) {
+	public static Protocol removeClient(int target) {
 		for (ServingThread st : servingThreads) {
 			if (st.getProtocol().getTargetPort() == target) {
 				st.interrupt();
@@ -80,42 +94,26 @@ public class ServerSideController
 		return ports;
 	}
 
-	public static void informOthers(ServerSideGame game, ServerSideProtocol exception, String msg) throws IOException {
-		ServerSideProtocol tempProt;
+	/**
+	 * Send a collective message to the clients of each serving thread.
+	 * 
+	 * @param game - The related game
+	 * @param exception - The one serving thread to skip when sending the messages
+	 * @param msg - The message to send
+	 * @throws IOException when one or more targeted protocols are unavailable.
+	 */
+	public static void informOthers(ServerSideGame game, Protocol exception, JSON msg) throws IOException {
+		Protocol tempProt;
 		
 		for (ServingThread st : servingThreads) {
 			if (st.getGame() == game) {
 				tempProt = st.getProtocol();
-				if (tempProt != exception) {
-					tempProt.send(msg);
-					ServerLogger.print(tempProt.getPort() + " received " + msg);
-				}
+				if (tempProt != exception) tempProt.send(msg);
 			}
 		}
 	}
 	
-	public static void informAll(ServerSideGame game, String msg) throws IOException {
+	public static void informAll(ServerSideGame game, JSON msg) throws IOException {
 		informOthers(game, null, msg);
-	}
-	
-	public static void informEnd(ServerSideGame game) {
-		GameState individualState;
-		int targetPort;
-		String msg;
-		
-		for (ServingThread st : servingThreads) {
-			if (st.getGame() == game) {
-				individualState = game.playerGameState[st.getPlayerIndex()];
-				msg = "end:" + game.name() + ":" + individualState + ":";
-				targetPort = st.getProtocol().getTargetPort();
-				
-				System.out.println("player with index " + st.getPlayerIndex());
-				System.out.println("got " + msg);
-				
-				GeneralService.notify(msg, targetPort);
-			}
-		}
-		
-		System.out.println(Arrays.toString(game.playerGameState));
 	}
 }

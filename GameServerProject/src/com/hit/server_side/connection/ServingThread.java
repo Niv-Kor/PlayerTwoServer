@@ -4,54 +4,59 @@ import java.io.IOException;
 import com.hit.server_side.game_controlling.BoardGameHandler;
 import com.hit.server_side.game_controlling.ServerSideController;
 import com.hit.server_side.game_controlling.ServerSideGame;
+
 import game_algo.GameBoard.GameMove;
+import game_algo.IGameAlgo;
 import game_algo.IGameAlgo.GameState;
-import games.TicTacToeSmart;
 
 public class ServingThread extends Thread
 {
-	private ServerSideProtocol serverSideProtocol;
+	private Protocol protocol;
 	private int playerIndex;
 	private ServerSideGame game;
 	private BoardGameHandler gameHandler;
 	
-	public ServingThread(ServerSideGame game, int playerIndex, ServerSideProtocol serverSideProtocol) {
+	public ServingThread(ServerSideGame game, int playerIndex, Protocol serverSideProtocol) {
 		this.game = game;
 		this.playerIndex = playerIndex;
-		this.serverSideProtocol = serverSideProtocol;
-		this.gameHandler = new BoardGameHandler(new TicTacToeSmart(3, 3));
+		this.protocol = serverSideProtocol;
 	}
 	
 	@Override
 	public void run() {
 		while (!interrupted()) {
 			try {
-				String[] msg = serverSideProtocol.receive();
-				
+				JSON msg = protocol.receive();
 				delay();
 				
-				switch(msg[0]) {
-					case "getsign": {
-						serverSideProtocol.send("getsign:" + game.getPlayerSign());
+				switch(msg.getType()) {
+					case "player_sign": {
+						JSON message = new JSON("player_sign");
+						message.put("sign", "" + game.getPlayerSign());
+						protocol.send(message);
 						break;
 					}
-					case "p2getsign": {
-						serverSideProtocol.send("p2getsign:" + game.getComputerSign());
+					case "player2_sign": {
+						JSON message = new JSON("player2_sign");
+						message.put("sign", "" + game.getComputerSign());
+						protocol.send(message);
 						break;
 					}
-					case "move": {
-						int row = Integer.parseInt(msg[1]);
-						int col = Integer.parseInt(msg[2]);
+					case "player_move": {
+						int row = msg.getInt("row");
+						int col = msg.getInt("column");
 						GameMove move = new GameMove(row, col);
-						gameHandler.updatePlayerMove(move);
+						if (!gameHandler.updatePlayerMove(move, game.getPlayerSign(), playerIndex)) break;
 						
 						delay();
 						
-						String notificationStr = "p2move:" + row + ":" + col + ":";
-						ServerSideController.informOthers(game, serverSideProtocol, notificationStr);
+						JSON message = new JSON("player2_move");
+						message.put("row", row);
+						message.put("column", col);
+						ServerSideController.informOthers(game, protocol, message);
 						break;
 					}
-					case "compmove": {
+					case "computer_move": {
 						GameMove compMove = gameHandler.calcComputerMove(game.getComputerSign());
 						
 						//notify player 1 which move was made
@@ -60,52 +65,60 @@ public class ServingThread extends Thread
 						
 						delay();
 						
-						String notificationStr = "p2move:" + row + ":" + col + ":";
-						ServerSideController.informAll(game, notificationStr);
+						JSON message = new JSON("player2_move");
+						message.put("row", row);
+						message.put("column", col);
+						ServerSideController.informAll(game, message);
 						break;
 					}
-					case "placecomp": {
-						int row = Integer.parseInt(msg[1]);
-						int col = Integer.parseInt(msg[2]);
+					case "place_computer": {
+						int row = msg.getInt("row");
+						int col = msg.getInt("column");
 						gameHandler.place(new GameMove(row, col), game.getComputerSign());
+						break;
+					}
+					case "place_player": {
+						int row = msg.getInt("row");
+						int col = msg.getInt("column");
+						gameHandler.place(new GameMove(row, col), game.getPlayerSign());
 						
 						delay();
 						
-						String notificationStr = "p2move:" + row + ":" + col + ":";
-						ServerSideController.informAll(game, notificationStr);
+						JSON message = new JSON("player2_move");
+						message.put("row", row);
+						message.put("column", col);
+						ServerSideController.informOthers(game, protocol, message);
 						break;
 					}
-					case "random": {
-						game.lastMovePlayerIndex = playerIndex;
-						game.getRandomModel().updatePlayerMove(null);
-						
-						GameMove p2Move = game.anonymousMoveBuffer;
-						int row = p2Move.getRow();
-						int col = p2Move.getColumn();
+					case "player_random": {
+						GameMove move = gameHandler.randomMove();
+						JSON message = new JSON("player_random");
+						message.put("row", move.getRow());
+						message.put("column", move.getColumn());
+						protocol.send(message);
 						
 						delay();
 						
-						String notificationStr = "p2move:" + row + ":" + col + ":";
-						ServerSideController.informOthers(game, serverSideProtocol, notificationStr);
+						message.setType("player2_move");
+						ServerSideController.informOthers(game, protocol, message);
 						break;
 					}
-					case "comprandom": {
-						game.getRandomModel().calcComputerMove();
+					case "computer_random": {
+						GameMove move = gameHandler.randomCompMove();
+						JSON message = new JSON("computer_random");
+						message.put("row", move.getRow());
+						message.put("column", move.getColumn());
+						protocol.send(message);
 						
-						//notify player 1 which move was made
-						GameMove compMove = game.anonymousMoveBuffer;
-						int row = compMove.getRow();
-						int col = compMove.getColumn();
-						
-						String notificationStr = "p2move:" + row + ":" + col + ":";
-						ServerSideController.informAll(game, notificationStr);
+						message.setType("player2_move");
+						ServerSideController.informOthers(game, protocol, message);
 						break;
 					}
-					case "tryend": {
+					case "is_over": {
 						attemptEndgame();
 						break;
 					}
-					default: throwUnrecognizedMessage(msg[0], "not available");
+					default: throwUnrecognizedMessage(msg.getType(), "not available");
 				}
 			}
 			catch(IOException e) {
@@ -116,11 +129,16 @@ public class ServingThread extends Thread
 	}
 	
 	public void attemptEndgame() throws IOException {
-		GameState state = gameHandler.getGameState();
+		GameState state = gameHandler.getGameState(game.getPlayerSign(), playerIndex);
 		
 		if (state != GameState.IN_PROGRESS) {
 			delay();
-			ServerSideController.informEnd(game);
+			
+			//notify the client about the game state
+			JSON message = new JSON("end_game");
+			message.put("game", game.name());
+			message.put("state", state.name());
+			protocol.send(message);
 		}
 	}
 	
@@ -135,6 +153,10 @@ public class ServingThread extends Thread
 	
 	public int getPlayerIndex() { return playerIndex; }
 	
-	public ServerSideProtocol getProtocol() { return serverSideProtocol; }
+	public Protocol getProtocol() { return protocol; }
 	public ServerSideGame getGame() { return game; }
+
+	public void setGameAlgorithm(IGameAlgo gameAlgo) {
+		gameHandler = new BoardGameHandler(gameAlgo);
+	}
 }

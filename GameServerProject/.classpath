@@ -6,7 +6,8 @@
 		</attributes>
 	</classpathentry>
 	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="lib" path="C:/Users/Korach/Desktop/JAVA/jars/JavaUtility.jar"/>
+	<classpathentry kind="lib" path="C:/Users/Korach/Desktop/JAVA/jars/json-simple-1.1.1.jar"/>
 	<classpathentry kind="lib" path="C:/Users/Korach/Desktop/JAVA/jars/GameAlgorithms.jar"/>
-	<classpathentry kind="lib" path="C:/Users/Korach/Desktop/JAVA/jars/NivKorUtils.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

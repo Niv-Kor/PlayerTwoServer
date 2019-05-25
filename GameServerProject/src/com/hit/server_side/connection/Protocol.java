@@ -5,7 +5,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 
-public class ServerSideProtocol
+public class Protocol
 {
 	protected InetAddress serverAddress;
 	protected DatagramSocket socket;
@@ -14,7 +14,7 @@ public class ServerSideProtocol
 	/**
 	 * @throws IOException when the socket cannot connect to the host.
 	 */
-	public ServerSideProtocol() throws IOException {
+	public Protocol() throws IOException {
 		this.serverAddress = InetAddress.getLocalHost();
 		this.port = PortGenerator.nextPort();
 		connect();
@@ -25,7 +25,7 @@ public class ServerSideProtocol
 	 * @param targetPort - The port this protocol will communicate with
 	 * @throws IOException when the socket cannot connect to the host.
 	 */
-	public ServerSideProtocol(Integer port, Integer targetPort) throws IOException {
+	public Protocol(Integer port, Integer targetPort) throws IOException {
 		this();
 		this.target = targetPort;
 		disconnect();
@@ -50,32 +50,31 @@ public class ServerSideProtocol
 	}
 	
 	/**
-	 * Send a String message to the target port.
+	 * Send a JSON message to the target port.
 	 * 
 	 * @param msg - The message to send
 	 * @throws IOException when the target port is unavailable for sending messages to.
 	 */
-	public void send(String msg) throws IOException {
-		byte[] data = msg.getBytes();
+	public void send(JSON msg) throws IOException {
+		byte[] data = msg.toString().getBytes();
 		DatagramPacket packet = new DatagramPacket(data, data.length, serverAddress, target);
 		socket.send(packet);
 	}
 	
 	/**
-	 * Receive a message from the target port.
+	 * Receive a JSON message from the target port.
 	 * This is a dangerous method and can cause starvation if not handled carefully.
 	 * 
 	 * @return an array of the message parts, where the first part is the request string.
 	 * @throws IOException when the target port is unavailable for receiving messages from.
 	 */
-	public String[] receive() throws IOException {
+	public JSON receive() throws IOException {
 		byte[] data = new byte[1024];
 		DatagramPacket packet = new DatagramPacket(data, data.length);
 		socket.receive(packet);
 		String message = new String(packet.getData(), 0, packet.getLength());
-		return message.split(":");
+		return new JSON(message);
 	}
-	
 	
 	/**
 	 * @return the port this protocol uses.

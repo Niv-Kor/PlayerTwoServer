@@ -1,8 +1,10 @@
 import java.beans.PropertyChangeSupport;
 import java.util.Scanner;
-import com.hit.server_side.connection.ClientFinder;
+
+import com.hit.server_side.connection.Server;
 import com.hit.server_side.connection.ServerLogger;
-import math.Range;
+
+import general_utility.math.Range;
 
 public class CLI implements Runnable
 {
@@ -11,14 +13,14 @@ public class CLI implements Runnable
 	private int parallelGames;
 	private Scanner scanner;
 	private PropertyChangeSupport propertyChangeHandler;
-	private ClientFinder finder;
+	private Server server;
 	private boolean running;
 	
 	public CLI() {
 		this.scanner = new Scanner(System.in);
 		this.propertyChangeHandler = new PropertyChangeSupport(this);
 		this.parallelGames = 1;
-		this.finder = new ClientFinder();
+		this.server = new Server();
 	}
 	
 	@Override
@@ -42,14 +44,14 @@ public class CLI implements Runnable
 					break;
 				}
 				case "START": {
-					finder.start();
+					server.start();
 					propertyChangeHandler.firePropertyChange("running", running, true);
 					running = true;
 					ServerLogger.print("Server started.");
 					break;
 				}
 				case "SHUTDOWN": {
-					finder.interrupt();
+					server.interrupt();
 					propertyChangeHandler.firePropertyChange("running", running, false);
 					running = false;
 					ServerLogger.print("Server was shut down.");

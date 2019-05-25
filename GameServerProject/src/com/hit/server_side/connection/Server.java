@@ -1,51 +1,55 @@
 package com.hit.server_side.connection;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import com.hit.server_side.game_controlling.ServerSideController;
 import com.hit.server_side.game_controlling.ServerSideGame;
 
-public class ClientFinder extends Thread
+public class Server extends Thread implements PropertyChangeListener
 {
-	private ServerSideProtocol finder;
-	private List<ServerSideProtocol> serverSideProtocols;
+	private Protocol finder;
+	private List<Protocol> serverSideProtocols;
 	
-	public ClientFinder() {
-		this.serverSideProtocols = new ArrayList<ServerSideProtocol>();
+	public Server() {
+		this.serverSideProtocols = new ArrayList<Protocol>();
 		
-		try { this.finder = new ServerSideProtocol(PortGenerator.AllocatedPorts.CLIENT_FINDER.getPort(), null); }
+		try { this.finder = new Protocol(PortGenerator.CLIENT_FINDER, null); }
 		catch (IOException e) { e.printStackTrace(); }
 	}
 	
 	@Override
 	public void run() {
-		while(!interrupted()) {
+		while(!isInterrupted()) {
 			try {
-				String[] msg = finder.receive();
-				ServerLogger.print("Client finder received message: '" + Arrays.toString(msg) + "'.");
+				JSON msg = finder.receive();
 				
 				//the game the client is referring to
-				ServerSideGame game = ServerSideGame.valueOf(msg[1]);
+				ServerSideGame game = ServerSideGame.valueOf(msg.getString("game"));
 				
 				//clients send their port with the message
-				int targetPort = Integer.parseInt(msg[2]);
+				int targetPort = msg.getInt("port");
 				
 				//sleep before answering
 				try { Thread.sleep(100); }
 				catch (InterruptedException e) {}
 				
-				switch(msg[0]) {
+				switch(msg.getType()) {
 					//a client wants to join the server
-					case "hello": {
+					case "new_client": {
 						if (isDuplicate(targetPort) || game.ready()) break;
 						
-						ServerSideProtocol newProt = new ServerSideProtocol();
+						Protocol newProt = new Protocol();
 						serverSideProtocols.add(newProt);
 						newProt.setTargetPort(targetPort);
 						finder.setTargetPort(targetPort);
-						finder.send("hello:" + newProt.getPort() + ":");
+						
+						//notify client with his new target port
+						JSON message = new JSON("new_client");
+						message.put("port", newProt.getPort());
+						finder.send(message);
 						
 						ServerSideController.addClient(game, newProt);
 						game.addClient();
@@ -54,17 +58,17 @@ public class ClientFinder extends Thread
 						break;
 					}
 					//a client wants to leave the server
-					case "bye": {
+					case "leaving_client": {
 						if (!isDuplicate(targetPort) || game.getClientsAmount() == 0) break;
 						
-						ServerSideProtocol freeConnection = ServerSideController.removeClient(targetPort);
+						Protocol freeConnection = ServerSideController.removeClient(targetPort);
 						if (freeConnection != null) {
 							ServerLogger.print("client with port " + freeConnection.getPort() + " removed.");
 							game.removeClient();
 						}
 						break;
 					}
-					default: throwUnrecognizedMessage(msg[0], "not available");
+					default: throwUnrecognizedMessage(msg.getType(), "not available");
 				}
 				
 				//start game if there's enough clients
@@ -89,5 +93,11 @@ public class ClientFinder extends Thread
 	
 	private boolean isDuplicate(int port) {
 		return ServerSideController.getPortsSet().contains(port);
+	}
+
+	@Override
+	public void propertyChange(PropertyChangeEvent arg0) {
+		// TODO Auto-generated method stub
+		
 	}
 }

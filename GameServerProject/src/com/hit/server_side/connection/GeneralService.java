@@ -3,13 +3,13 @@ import java.io.IOException;
 
 public class GeneralService
 {
-	private static ServerSideProtocol serverSideProtocol;
+	private static Protocol serverSideProtocol;
 	
 	public static void init() throws IOException {
-		serverSideProtocol = new ServerSideProtocol(PortGenerator.AllocatedPorts.GENERAL_SERVICE.getPort(), null);
+		serverSideProtocol = new Protocol(PortGenerator.GENERAL_SERVICE, null);
 	}
 	
-	public static boolean notify(String msg, int targetPort) {
+	public static boolean notify(JSON msg, int targetPort) {
 		try {
 			serverSideProtocol.setTargetPort(targetPort);
 			serverSideProtocol.send(msg);
