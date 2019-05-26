@@ -3,20 +3,20 @@ import java.io.IOException;
 
 import com.hit.server_side.game_controlling.BoardGameHandler;
 import com.hit.server_side.game_controlling.ServerSideController;
-import com.hit.server_side.game_controlling.ServerSideGame;
+import com.hit.server_side.game_controlling.Game;
 
 import game_algo.GameBoard.GameMove;
 import game_algo.IGameAlgo;
 import game_algo.IGameAlgo.GameState;
 
-public class ServingThread extends Thread
+public class HandleRequest extends Thread
 {
 	private Protocol protocol;
 	private int playerIndex;
-	private ServerSideGame game;
+	private Game game;
 	private BoardGameHandler gameHandler;
 	
-	public ServingThread(ServerSideGame game, int playerIndex, Protocol serverSideProtocol) {
+	public HandleRequest(Game game, int playerIndex, Protocol serverSideProtocol) {
 		this.game = game;
 		this.playerIndex = playerIndex;
 		this.protocol = serverSideProtocol;
@@ -154,7 +154,7 @@ public class ServingThread extends Thread
 	public int getPlayerIndex() { return playerIndex; }
 	
 	public Protocol getProtocol() { return protocol; }
-	public ServerSideGame getGame() { return game; }
+	public Game getGame() { return game; }
 
 	public void setGameAlgorithm(IGameAlgo gameAlgo) {
 		gameHandler = new BoardGameHandler(gameAlgo);

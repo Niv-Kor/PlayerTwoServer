@@ -9,19 +9,19 @@ import com.hit.server_side.connection.GeneralService;
 import com.hit.server_side.connection.JSON;
 import com.hit.server_side.connection.ServerLogger;
 import com.hit.server_side.connection.Protocol;
-import com.hit.server_side.connection.ServingThread;
+import com.hit.server_side.connection.HandleRequest;
 
 import game_algo.IGameAlgo;
 
 public class ServerSideController
 {
-	private static List<ServingThread> servingThreads;
+	private static List<HandleRequest> servingThreads;
 	
 	public static void init() {
-		servingThreads = new ArrayList<ServingThread>();
+		servingThreads = new ArrayList<HandleRequest>();
 	}
 	
-	public static void startGame(ServerSideGame game) {
+	public static void startGame(Game game) {
 		boolean gaveTurn = false;
 		boolean firstTurnGiver;
 		IGameAlgo gameAlgo;
@@ -33,7 +33,7 @@ public class ServerSideController
 			return;
 		}
 		
-		for (ServingThread st : servingThreads) {
+		for (HandleRequest st : servingThreads) {
 			if (st.getGame() == game) {
 				st.setGameAlgorithm(gameAlgo);
 				
@@ -53,7 +53,7 @@ public class ServerSideController
 		}
 	}
 	
-	public static void addClient(ServerSideGame game, Protocol protocol) {
+	public static void addClient(Game game, Protocol protocol) {
 		/*
 		 * The playerIndex variable suppose to solve the problem
 		 * where gameBoard.updatePlayerMove() does not know which of
@@ -68,13 +68,13 @@ public class ServerSideController
 		 */
 		int playerIndex = game.getClientsAmount();
 		
-		ServingThread st = new ServingThread(game, playerIndex, protocol);
+		HandleRequest st = new HandleRequest(game, playerIndex, protocol);
 		servingThreads.add(st);
 		st.start();
 	}
 
 	public static Protocol removeClient(int target) {
-		for (ServingThread st : servingThreads) {
+		for (HandleRequest st : servingThreads) {
 			if (st.getProtocol().getTargetPort() == target) {
 				st.interrupt();
 				servingThreads.remove(st);
@@ -88,7 +88,7 @@ public class ServerSideController
 	public static Set<Integer> getPortsSet() {
 		Set<Integer> ports = new HashSet<Integer>();
 		
-		for (ServingThread st : servingThreads)
+		for (HandleRequest st : servingThreads)
 			ports.add(st.getProtocol().getTargetPort());
 		
 		return ports;
@@ -102,10 +102,10 @@ public class ServerSideController
 	 * @param msg - The message to send
 	 * @throws IOException when one or more targeted protocols are unavailable.
 	 */
-	public static void informOthers(ServerSideGame game, Protocol exception, JSON msg) throws IOException {
+	public static void informOthers(Game game, Protocol exception, JSON msg) throws IOException {
 		Protocol tempProt;
 		
-		for (ServingThread st : servingThreads) {
+		for (HandleRequest st : servingThreads) {
 			if (st.getGame() == game) {
 				tempProt = st.getProtocol();
 				if (tempProt != exception) tempProt.send(msg);
@@ -113,7 +113,7 @@ public class ServerSideController
 		}
 	}
 	
-	public static void informAll(ServerSideGame game, JSON msg) throws IOException {
+	public static void informAll(Game game, JSON msg) throws IOException {
 		informOthers(game, null, msg);
 	}
 }

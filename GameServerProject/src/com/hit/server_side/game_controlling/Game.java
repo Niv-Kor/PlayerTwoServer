@@ -10,7 +10,7 @@ import games.TicTacToe;
 import games.TicTacToeRandom;
 import games.TicTacToeSmart;
 
-public enum ServerSideGame
+public enum Game
 {
 	TIC_TAC_TOE(2, new Dimension(3, 3),
 				TicTacToeSmart.class, TicTacToeRandom.class,
@@ -28,7 +28,7 @@ public enum ServerSideGame
 	private Dimension boardSize;
 	private Class<? extends GameBoard> smartClass, randomClass;
 	
-	private ServerSideGame(int goal, Dimension boardSize,
+	private Game(int goal, Dimension boardSize,
 						   Class<? extends GameBoard> smrtCls,
 						   Class<? extends GameBoard> rndCls,
 						   char playerSign, char compSign) {

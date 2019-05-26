@@ -1,9 +1,9 @@
+import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Scanner;
-
-import com.hit.server_side.connection.Server;
 import com.hit.server_side.connection.ServerLogger;
-
 import general_utility.math.Range;
 
 public class CLI implements Runnable
@@ -13,14 +13,12 @@ public class CLI implements Runnable
 	private int parallelGames;
 	private Scanner scanner;
 	private PropertyChangeSupport propertyChangeHandler;
-	private Server server;
 	private boolean running;
 	
-	public CLI() {
-		this.scanner = new Scanner(System.in);
+	public CLI(InputStream in, OutputStream out) {
+		this.scanner = new Scanner(in);
 		this.propertyChangeHandler = new PropertyChangeSupport(this);
 		this.parallelGames = 1;
-		this.server = new Server();
 	}
 	
 	@Override
@@ -34,7 +32,11 @@ public class CLI implements Runnable
 			switch(command) {
 				case "GAME_SERVER_CONFIG": {
 					int oldAmount = parallelGames;
+					
+					ServerLogger.newLine();
 					int amount = scanner.nextInt();
+					
+					System.out.println("continue");
 					
 					if (PARALLEL_GAMES_RANGE.intersects(amount)) parallelGames = amount;
 					else fail("Amount of parallel games must be between "
@@ -44,26 +46,32 @@ public class CLI implements Runnable
 					break;
 				}
 				case "START": {
-					server.start();
 					propertyChangeHandler.firePropertyChange("running", running, true);
 					running = true;
-					ServerLogger.print("Server started.");
+					ServerLogger.print("The server has been started.");
 					break;
 				}
 				case "SHUTDOWN": {
-					server.interrupt();
 					propertyChangeHandler.firePropertyChange("running", running, false);
 					running = false;
-					ServerLogger.print("Server was shut down.");
+					ServerLogger.print("The server has been shut down.");
 					break;
 				}
-				default: fail("Unrecognized command");
+				default: {
+					fail("unrecognized command");
+					try { Thread.sleep(50); }
+					catch(InterruptedException e) {}
+				}
 			}
 		}
 	}
 	
 	private void fail(String reason) {
 		String addition = (reason != null) ? " " + reason : "";
-		ServerLogger.print("Invalid input." + addition + ".");
+		ServerLogger.error("Invalid input." + addition + ".");
+	}
+
+	public void addPropertyChangeListener(PropertyChangeListener listener) {
+		propertyChangeHandler.addPropertyChangeListener(listener);
 	}
 }
