@@ -1,4 +1,4 @@
-package com.hit.server_side.game_controlling;
+package com.hit.control;
 import java.awt.Dimension;
 
 import game_algo.GameBoard;
@@ -22,8 +22,7 @@ public enum Game
 					CatchTheBunny.BoardSigns.PLAYER.getSign(),
 					CatchTheBunny.BoardSigns.COMPUTER.getSign());
 	
-	private int clients, clientsGoal;
-	private boolean running;
+	private int clientsGoal;
 	private char playerSign, compSign;
 	private Dimension boardSize;
 	private Class<? extends GameBoard> smartClass, randomClass;
@@ -33,7 +32,6 @@ public enum Game
 						   Class<? extends GameBoard> rndCls,
 						   char playerSign, char compSign) {
 		
-		this.clients = 0;
 		this.clientsGoal = goal;
 		this.boardSize = boardSize;
 		this.smartClass = smrtCls;
@@ -42,28 +40,27 @@ public enum Game
 		this.compSign = compSign;
 	}
 	
-	public IGameAlgo getSmartModel() throws Exception {
-		return smartClass.asSubclass(GameBoard.class).
-			   getConstructor(int.class, int.class).
-			   newInstance(boardSize.width, boardSize.height);
+	public IGameAlgo getSmartModel() {
+		return getModel(smartClass);
 	}
 	
-	public IGameAlgo getRandomModel() throws Exception {
-		return randomClass.asSubclass(GameBoard.class).
-			   getConstructor(int.class, int.class).
-			   newInstance(boardSize.width, boardSize.height);
+	public IGameAlgo getRandomModel() {
+		return getModel(randomClass);
 	}
 	
-	public int getClientsAmount() { return clients; }
+	private IGameAlgo getModel(Class<? extends GameBoard> c) {
+		try {
+			return c.asSubclass(GameBoard.class).
+				   getConstructor(int.class, int.class).
+				   newInstance(boardSize.width, boardSize.height);
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
 	public int getGoalAmount() { return clientsGoal; }
 	public char getPlayerSign() { return playerSign; }
 	public char getComputerSign() { return compSign; }
-	public void addClient() { if (!ready()) ++clients; }
-	public void removeClient() {
-		if (clients > 0) --clients;
-		run(false);
-	}
-	public void run(boolean flag) { running = flag; }
-	public boolean isRunning() { return running; }
-	public boolean ready() { return clients == clientsGoal; }
 }

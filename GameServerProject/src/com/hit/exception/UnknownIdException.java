@@ -1,4 +1,4 @@
-package exception;
+package com.hit.exception;
 
 public class UnknownIdException extends Exception
 {

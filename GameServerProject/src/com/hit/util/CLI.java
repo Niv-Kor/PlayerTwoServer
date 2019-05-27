@@ -1,10 +1,12 @@
+package com.hit.util;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Scanner;
-import com.hit.server_side.connection.ServerLogger;
-import general_utility.math.Range;
+
+import javaNK.util.debugging.Logger;
+import javaNK.util.math.Range;
 
 public class CLI implements Runnable
 {
@@ -26,14 +28,14 @@ public class CLI implements Runnable
 		String command;
 		
 		while(true) {
-			ServerLogger.newLine();
+			Logger.newLine();
 			command = scanner.nextLine();
 			
 			switch(command) {
 				case "GAME_SERVER_CONFIG": {
 					int oldAmount = parallelGames;
 					
-					ServerLogger.newLine();
+					Logger.newLine();
 					int amount = scanner.nextInt();
 					
 					System.out.println("continue");
@@ -48,13 +50,13 @@ public class CLI implements Runnable
 				case "START": {
 					propertyChangeHandler.firePropertyChange("running", running, true);
 					running = true;
-					ServerLogger.print("The server has been started.");
+					Logger.print("The server has been started.");
 					break;
 				}
 				case "SHUTDOWN": {
 					propertyChangeHandler.firePropertyChange("running", running, false);
 					running = false;
-					ServerLogger.print("The server has been shut down.");
+					Logger.print("The server has been shut down.");
 					break;
 				}
 				default: {
@@ -68,7 +70,7 @@ public class CLI implements Runnable
 	
 	private void fail(String reason) {
 		String addition = (reason != null) ? " " + reason : "";
-		ServerLogger.error("Invalid input." + addition + ".");
+		Logger.error("Invalid input." + addition + ".");
 	}
 
 	public void addPropertyChangeListener(PropertyChangeListener listener) {

@@ -1,0 +1,49 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>GameServerProject</groupId>
+  <artifactId>GameServerProject</artifactId>
+  <version>1.0.0.3</version>
+  <build>
+    <sourceDirectory>src</sourceDirectory>
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.7.0</version>
+        <configuration>
+          <release>9</release>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+  
+  <repositories>
+		<repository>
+			<id>com.java.utilities</id>
+	    	<name>java.util Maven Plugin</name>
+	   		<url>https://github.com/Niv-Kor/JavaUtilities.git</url>
+		</repository>
+		
+		<repository>
+			<id>GameAlgorithms</id>
+	    	<name>jGameAlgorithms Maven Plugin</name>
+	   		<url>https://github.com/Niv-Kor/GameAlgorithms.git</url>
+		</repository>
+	</repositories>
+  
+	<dependencies>
+  		<dependency>
+	      	<groupId>GameAlgorithms</groupId>
+	      	<artifactId>GameAlgorithms</artifactId>
+	      	<version>0.0.1-SNAPSHOT</version>
+	      	<scope>System</scope>
+		</dependency>
+		
+  		<dependency>
+	      	<groupId>com.java.utilities</groupId>
+	      	<artifactId>java.util</artifactId>
+	      	<version>1.0.3.0</version>
+	      	<scope>System</scope>
+		</dependency>
+	</dependencies>
+  
+</project>

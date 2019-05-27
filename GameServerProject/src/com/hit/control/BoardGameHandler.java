@@ -1,4 +1,4 @@
-package com.hit.server_side.game_controlling;
+package com.hit.control;
 import game_algo.GameBoard.GameMove;
 import game_algo.IGameAlgo;
 import game_algo.IGameAlgo.GameState;
@@ -93,8 +93,7 @@ public class BoardGameHandler
 		return gameAlgo.getGameState(anySignSpot);
 	}
 	
-	@SuppressWarnings("unused")
-	private void print() {
+	public void printBoard() {
 		char[][] cloneBoard = gameAlgo.getBoardState().clone();
 		int rows = cloneBoard.length, cols = cloneBoard[0].length;
 		
