@@ -2,26 +2,23 @@ package com.hit.server;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.IOException;
+
 import com.hit.control.Game;
 import com.hit.control.OpenGame;
 import com.hit.services.GameServerController;
+
 import javaNK.util.debugging.Logger;
 import javaNK.util.networking.JSON;
 import javaNK.util.networking.Protocol;
+import javaNK.util.networking.RespondEngine;
+import javaNK.util.networking.RespondCase;
 
-public class Server implements Runnable, PropertyChangeListener
+public class Server extends RespondEngine implements PropertyChangeListener
 {
-	private Protocol generalCommunicator;
 	private GameServerController controller;
-	private volatile boolean running;
 	
-	/**
-	 * @param port - The port that this will listens to
-	 */
-	public Server(int port) {
-		try { this.generalCommunicator = new Protocol(port, null); }
-		catch (IOException e) { e.printStackTrace(); }
-		
+	public Server(int port) throws IOException {
+		super(port);
 		this.controller = new GameServerController(this);
 		new Thread(this).start();
 	}
@@ -29,74 +26,9 @@ public class Server implements Runnable, PropertyChangeListener
 	@Override
 	public void propertyChange(PropertyChangeEvent e) {
 		if (e.getPropertyName().equals("running"))
-			running = (boolean) e.getNewValue();
+			pause(!(boolean) e.getNewValue());
 	}
 
-	@Override
-	public void run() {
-		while(true) {
-			while(running) {
-				try {
-					JSON msg = generalCommunicator.receive();
-					
-					//the game the client is referring to
-					Game game = Game.valueOf(msg.getString("game"));
-					
-					//clients send their port with the message
-					int targetPort = msg.getInt("port");
-					
-					//sleep before answering
-					try { Thread.sleep(100); }
-					catch (InterruptedException e) {}
-					
-					switch(msg.getType()) {
-						case "new_client": {
-							//check if client already playing
-							if (!controller.isAllowed(targetPort, game)) continue;
-							
-							//create a new protol that listens to the new client
-							Protocol newProt = new Protocol(false);
-							newProt.setTargetPort(targetPort);
-							
-							OpenGame openGame = controller.addClient(newProt, game, msg);
-							
-							//notify client about his new target port
-							generalCommunicator.setTargetPort(msg.getInt("port"));
-							JSON message = new JSON("new_client");
-							message.put("port", newProt.getPort());
-							generalCommunicator.send(message);
-							
-							try { Thread.sleep(100); }
-							catch (InterruptedException e) {}
-							
-							//inform all about the beginning of the game
-							if (openGame.canRun()) notifyStart(openGame);
-							
-							Logger.print("Added player at port " + newProt.getPort() + ".");
-							break;
-						}
-						case "leaving_client": {
-							controller.closeGame(targetPort, game);
-							
-							Logger.print("Player from port " + targetPort + " "
-									   + "has left the " + game.name() + " game.");
-							break;
-						}
-						case "happy_client": {
-							controller.restartGame(targetPort, game);
-							break;
-						}
-						default: Logger.error(msg, "Not available.");
-					}
-				}
-				catch(IOException e) {
-					Logger.print("Encountered a problem: " + e.getMessage());
-					e.printStackTrace();
-				}
-			}
-		}
-	}
-	
 	/**
 	 * Notify all clients about the beginning of the game.
 	 * 
@@ -119,8 +51,8 @@ public class Server implements Runnable, PropertyChangeListener
 			message.put("game", openGame.getGame().name());
 			message.put("turn", firstTurnGiver);
 			
-			generalCommunicator.setTargetPort(clientProtocol.getTargetPort());
-			generalCommunicator.send(message);
+			protocol.setTargetPort(clientProtocol.getTargetPort());
+			protocol.send(message);
 		}
 	}
 	
@@ -131,7 +63,82 @@ public class Server implements Runnable, PropertyChangeListener
 	 * @throws IOException when the client's protocol is unavailable
 	 */
 	public void notify(Protocol prot, JSON msg) throws IOException {
-		generalCommunicator.setTargetPort(prot.getTargetPort());
-		generalCommunicator.send(msg);
+		protocol.setTargetPort(prot.getTargetPort());
+		protocol.send(msg);
+	}
+	
+	protected void initCases() {
+		//new client service
+		addCase(new RespondCase() {
+			@Override
+			public String getType() { return "new_client"; }
+			
+			@Override
+			public void respond(JSON msg) throws Exception {
+				//the game the client is referring to
+				Game game = Game.valueOf(msg.getString("game"));
+				
+				//clients send their port with the message
+				int targetPort = msg.getInt("port");
+				
+				//check if client already playing
+				if (!controller.isAllowed(targetPort, game)) return;
+				
+				//create a new protocol that listens to the new client
+				Protocol newProt = new Protocol();
+				newProt.setTargetPort(targetPort);
+				
+				OpenGame openGame = controller.addClient(newProt, game, msg);
+				
+				//notify client about his new target port
+				protocol.setTargetPort(targetPort);
+				JSON message = new JSON("new_client");
+				message.put("port", newProt.getPort());
+				protocol.send(message);
+				
+				try { Thread.sleep(100); }
+				catch (InterruptedException e) {}
+				
+				//inform all about the beginning of the game
+				if (openGame.canRun()) notifyStart(openGame);
+				
+				Logger.print("Added player at port " + newProt.getPort() + ".");
+			}
+		});
+		
+		//leaving client service
+		addCase(new RespondCase() {
+			@Override
+			public String getType() { return "leaving_client"; }
+			
+			@Override
+			public void respond(JSON msg) throws Exception {
+				//the game the client is referring to
+				Game game = Game.valueOf(msg.getString("game"));
+				
+				//clients send their port with the message
+				int targetPort = msg.getInt("port");
+				
+				controller.closeGame(targetPort, game);
+				Logger.print("Player from port " + targetPort + " has left the " + game.name() + " game.");
+			}
+		});
+		
+		//restart game for client service
+		addCase(new RespondCase() {
+			@Override
+			public String getType() { return "happy_client"; }
+			
+			@Override
+			public void respond(JSON msg) throws Exception {
+				//the game the client is referring to
+				Game game = Game.valueOf(msg.getString("game"));
+				
+				//clients send their port with the message
+				int targetPort = msg.getInt("port");
+				
+				controller.restartGame(targetPort, game);
+			}
+		});
 	}
 }

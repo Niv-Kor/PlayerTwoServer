@@ -24,7 +24,7 @@ public class BoardGameHandler
 		 * and thus not affected by this solution. 
 		 */
 		if (success) place(move, (char) (playerSign + playerIndex));
-		
+		System.out.println("success " + success);
 		return success;
 	}
 	

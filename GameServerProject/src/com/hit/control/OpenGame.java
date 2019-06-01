@@ -1,4 +1,5 @@
 package com.hit.control;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -17,6 +18,7 @@ public class OpenGame
 	private BoardGameHandler handler;
 	private GameServerController controller;
 	private Map<Protocol, HandleRequest> clients;
+	private Set<Integer> clientPorts;
 	
 	/**
 	 * @param game - The game to open
@@ -27,6 +29,7 @@ public class OpenGame
 		
 		this.game = game;
 		this.clients = new HashMap<Protocol, HandleRequest>();
+		this.clientPorts = new HashSet<Integer>();
 		this.handler = new BoardGameHandler(game.getSmartModel());
 		this.controller = controller;
 	}
@@ -43,7 +46,13 @@ public class OpenGame
 	 * @return true if after adding the client, the game can run.
 	 */
 	public boolean subscribe(Protocol prot) {
-		if (!canRun()) clients.put(prot, new HandleRequest(this, prot, clients.size()));
+		if (!canRun()) {
+			try {
+				clients.put(prot, new HandleRequest(this, prot, clients.size()));
+				clientPorts.add(prot.getTargetPort());
+			}
+			catch(IOException e) { return false; }
+		}
 		return canRun();
 	}
 	
@@ -52,8 +61,10 @@ public class OpenGame
 	 * @param port - The port of the client to remove
 	 */
 	public void removeClient(int port) {
-		for (Protocol client : clients.keySet())
+		for (Protocol client : clients.keySet()) {
 			if (client.getPort() == port) clients.remove(client);
+			clientPorts.remove(port);
+		}
 	}
 	
 	/**
@@ -65,6 +76,8 @@ public class OpenGame
 	 * @return all of the game's client protocols.
 	 */
 	public Set<Protocol> getClients() { return clients.keySet(); }
+	
+	public boolean hasPlayer(int port) { return clientPorts.contains(port); }
 	
 	/**
 	 * @return the game that's opened.

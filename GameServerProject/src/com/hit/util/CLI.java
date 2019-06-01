@@ -13,12 +13,10 @@ public class CLI implements Runnable
 	private static final Range<Integer> PARALLEL_GAMES_RANGE = new Range<Integer>(1, 10);
 	
 	private int parallelGames;
-	private Scanner scanner;
 	private PropertyChangeSupport propertyChangeHandler;
 	private boolean running;
 	
 	public CLI(InputStream in, OutputStream out) {
-		this.scanner = new Scanner(in);
 		this.propertyChangeHandler = new PropertyChangeSupport(this);
 		this.parallelGames = 1;
 	}
@@ -28,17 +26,13 @@ public class CLI implements Runnable
 		String command;
 		
 		while(true) {
-			Logger.newLine();
-			command = scanner.nextLine();
+			command = Logger.inputLine();
 			
 			switch(command) {
 				case "GAME_SERVER_CONFIG": {
 					int oldAmount = parallelGames;
 					
-					Logger.newLine();
-					int amount = scanner.nextInt();
-					
-					System.out.println("continue");
+					int amount = Logger.inputInt();
 					
 					if (PARALLEL_GAMES_RANGE.intersects(amount)) parallelGames = amount;
 					else fail("Amount of parallel games must be between "
