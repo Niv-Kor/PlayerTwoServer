@@ -7,36 +7,49 @@ import game_algo.GameBoard.GameMove;
 import game_algo.IGameAlgo.GameState;
 import javaNK.util.networking.JSON;
 import javaNK.util.networking.Protocol;
-import javaNK.util.networking.RespondCase;
-import javaNK.util.networking.RespondEngine;
+import javaNK.util.networking.ResponseCase;
+import javaNK.util.networking.ResponseEngine;
 
-public class HandleRequest extends RespondEngine
+public class HandleRequest extends ResponseEngine
 {
 	private int playerIndex;
 	private Game game;
 	private OpenGame openGame;
 	private BoardGameHandler boardHandler;
 	
+	/**
+	 * @param openGame - The game the client to handle is playing
+	 * @param prot - The protocol of the client to handle
+	 * @param playerIndex - The index of the client (unique for every client of the open game)
+	 * @throws IOException when the client's protocol is unavailable.
+	 */
 	public HandleRequest(OpenGame openGame, Protocol prot, int playerIndex) throws IOException {
-		super(prot);
+		super(prot, true);
 		
 		this.openGame = openGame;
 		this.game = openGame.getGame();
 		this.playerIndex = playerIndex;
 		this.boardHandler = openGame.getBoardHandler();
-		new Thread(this).start();
 	}
 	
+	/**
+	 * Check if the game reached an end.
+	 * If it did, notify the handled client about it.
+	 * 
+	 * @return true if the game ended.
+	 * @throws IOException when the client's protocol is unavailable.
+	 */
 	public boolean attemptEndgame() throws IOException {
 		GameState state = boardHandler.getGameState(game.getPlayerSign(), playerIndex);
 
 		//notify the client about the game state
 		if (state != GameState.IN_PROGRESS) {
+			openGame.pauseGame(true);
+			
 			JSON message = new JSON("end_game");
 			message.put("game", game.name());
 			message.put("state", state.name());
 			protocol.send(message);
-			
 			return true;
 		}
 		else return false;
@@ -45,7 +58,7 @@ public class HandleRequest extends RespondEngine
 	@Override
 	protected void initCases() {
 		//get player's sign
-		addCase(new RespondCase() {
+		addCase(new ResponseCase() {
 			@Override
 			public String getType() { return "player_sign"; }
 
@@ -58,7 +71,7 @@ public class HandleRequest extends RespondEngine
 		});
 		
 		//get player 2's sign
-		addCase(new RespondCase() {
+		addCase(new ResponseCase() {
 			@Override
 			public String getType() { return "player2_sign"; }
 
@@ -71,7 +84,7 @@ public class HandleRequest extends RespondEngine
 		});
 		
 		//make a player move
-		addCase(new RespondCase() {
+		addCase(new ResponseCase() {
 			@Override
 			public String getType() { return "player_move"; }
 
@@ -96,7 +109,7 @@ public class HandleRequest extends RespondEngine
 		});
 		
 		//make a computer move
-		addCase(new RespondCase() {
+		addCase(new ResponseCase() {
 			@Override
 			public String getType() { return "computer_move"; }
 
@@ -116,7 +129,7 @@ public class HandleRequest extends RespondEngine
 		});
 		
 		//place the player's sign on the board manually
-		addCase(new RespondCase() {
+		addCase(new ResponseCase() {
 			@Override
 			public String getType() { return "place_player"; }
 			
@@ -134,7 +147,7 @@ public class HandleRequest extends RespondEngine
 		});
 		
 		//place the computer's sign on the board manually
-		addCase(new RespondCase() {
+		addCase(new ResponseCase() {
 			@Override
 			public String getType() { return "place_computer"; }
 
@@ -147,7 +160,7 @@ public class HandleRequest extends RespondEngine
 		});
 		
 		//make a random player move
-		addCase(new RespondCase() {
+		addCase(new ResponseCase() {
 			@Override
 			public String getType() { return "player_random"; }
 
@@ -165,7 +178,7 @@ public class HandleRequest extends RespondEngine
 		});
 		
 		//make a random computer move
-		addCase(new RespondCase() {
+		addCase(new ResponseCase() {
 			@Override
 			public String getType() { return "computer_random"; }
 			
@@ -183,15 +196,14 @@ public class HandleRequest extends RespondEngine
 		});
 		
 		//check that the game is over
-		addCase(new RespondCase() {
+		addCase(new ResponseCase() {
 			@Override
 			public String getType() { return "is_over"; }
 
 			@Override
 			public void respond(JSON msg) throws Exception {
-				System.out.println("got is over");
 				boolean over = attemptEndgame();
-				
+
 				JSON message = new JSON("is_over");
 				message.put("over", over);
 				protocol.send(message);
@@ -199,11 +211,39 @@ public class HandleRequest extends RespondEngine
 		});
 	}
 	
+	@Override
+	protected void targetDied() {
+		super.targetDied();
+		kill();
+		openGame.removeClient(protocol.getRemotePort());
+		protocol.close();
+	}
+	
+	@Override
+	public void kill() {
+		super.kill();
+		protocol.close();
+	}
+	
+	/**
+	 * @return the client's index (unique for every client of the open game).
+	 */
 	public int getPlayerIndex() { return playerIndex; }
 	
+	/**
+	 * @return the client's protocol.
+	 */
 	public Protocol getProtocol() { return protocol; }
 	
+	/**
+	 * @return the type of the game this handler handles.
+	 */
 	public Game getGame() { return game; }
-
+	
+	/**
+	 * Set a new BoardGameHandler object (must be set for all clients of the open game as a whole).
+	 *  
+	 * @param handler - The new BoardGameHandler object to work with
+	 */
 	public void reissueBoardHandler(BoardGameHandler handler) { boardHandler = handler; }
 }
