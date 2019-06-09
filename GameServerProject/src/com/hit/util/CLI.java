@@ -5,16 +5,15 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 import javaNK.util.debugging.Logger;
-import javaNK.util.math.Range;
 import javaNK.util.threads.ThreadUtility;
 
 public class CLI implements Runnable
 {
-	private static final Range<Integer> PARALLEL_GAMES_RANGE = new Range<Integer>(1, 10);
+	public static final int DEFAULT_BACKLOG = 10;
 	
-	private int parallelGames;
 	private PropertyChangeSupport propertyChangeHandler;
 	private boolean running;
+	private int backlog;
 	
 	/**
 	 * @param in - The stream from which the CLI commands are received
@@ -24,13 +23,12 @@ public class CLI implements Runnable
 		Logger.configInputStream(in);
 		Logger.configOutputStream(out);
 		this.propertyChangeHandler = new PropertyChangeSupport(this);
-		this.parallelGames = 1;
+		this.backlog = DEFAULT_BACKLOG;
 	}
 	
 	@Override
 	public void run() {
 		String command;
-		Logger.newLine();
 		
 		while(true) {
 			command = Logger.inputLine();
@@ -57,20 +55,19 @@ public class CLI implements Runnable
 					break;
 				}
 				case "GAME_SERVER_CONFIG": {
-					int oldAmount = parallelGames;
+					if (running) Logger.error("Cannot change configurations while the server is running.");
+					else {
+						int oldValue = backlog;
+						backlog = Logger.inputInt();
+						
+						propertyChangeHandler.firePropertyChange("backlog", oldValue, backlog);
+						writeResponse("Backlog value is now " + backlog + ".");
+					}
 					
-					int amount = Logger.inputInt();
-					
-					if (PARALLEL_GAMES_RANGE.intersects(amount)) parallelGames = amount;
-					else fail("Amount of parallel games must be between "
-							+ PARALLEL_GAMES_RANGE.getMin() + " and " + PARALLEL_GAMES_RANGE.getMax());
-					
-					propertyChangeHandler.firePropertyChange("parallel", oldAmount, parallelGames);
-					writeResponse("Available parallel games amount is now " + amount + ".");
 					break;
 				}
 				default: {
-					fail("Unrecognized command.");
+					Logger.error("Unrecognized command.");
 					ThreadUtility.delay(50);
 				}
 			}
@@ -84,11 +81,6 @@ public class CLI implements Runnable
 	 */
 	private void writeResponse(String response) {
 		Logger.print(response);
-	}
-	
-	private void fail(String reason) {
-		String addition = (reason != null) ? " " + reason : "";
-		Logger.error("Invalid input." + addition + ".");
 	}
 	
 	/**

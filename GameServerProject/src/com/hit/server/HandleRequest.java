@@ -166,7 +166,7 @@ public class HandleRequest extends ResponseEngine
 
 			@Override
 			public void respond(JSON msg) throws Exception {
-				GameMove move = boardHandler.randomMove();
+				GameMove move = boardHandler.randomMove(game.getPlayerSign(), playerIndex);
 				JSON message = new JSON("player_random");
 				message.put("row", move.getRow());
 				message.put("column", move.getColumn());

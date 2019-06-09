@@ -13,7 +13,6 @@ public class BoardGameHandler
 		this.smartAlgo = game.getSmartModel();
 		this.randomAlgo = game.getRandomModel();
 		this.compAlgo = compGameAlgo;
-		System.out.println("comp chosen " + compGameAlgo);
 		
 		//merge all game algo objects so they share the same board state
 		randomAlgo.merge(smartAlgo);
@@ -54,7 +53,6 @@ public class BoardGameHandler
 			place(move, (char) (playerSign + playerIndex));
 		}
 		
-		printBoard();
 		return success;
 	}
 	
@@ -93,10 +91,12 @@ public class BoardGameHandler
 	 * 
 	 * @return the move that had been made.
 	 */
-	public GameMove randomMove() {
+	public GameMove randomMove(char playerSign, int playerIndex) {
 		char[][] before = copyBoardState();
 		randomAlgo.updatePlayerMove(null);
-		return findLastMove(before, randomAlgo.getBoardState());
+		GameMove spot = findLastMove(before, randomAlgo.getBoardState());
+		place(spot, (char) (playerSign + playerIndex));
+		return spot;
 	}
 	
 	/**

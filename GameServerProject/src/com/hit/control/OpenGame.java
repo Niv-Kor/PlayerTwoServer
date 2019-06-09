@@ -1,17 +1,10 @@
 package com.hit.control;
-
 import java.io.IOException;
-import java.util.AbstractMap.SimpleEntry;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
-
 import com.hit.exception.UnknownIdException;
 import com.hit.server.HandleRequest;
 import com.hit.services.GameServerController;
-
 import game_algo.IGameAlgo;
 import game_algo.IGameAlgo.GameState;
 import javaNK.util.math.RNG;
@@ -24,8 +17,8 @@ public class OpenGame
 	private Game game;
 	private BoardGameHandler handler;
 	private GameServerController controller;
-	private volatile Map<Protocol, Entry<Boolean, HandleRequest>> clients;
-	private volatile Set<Integer> clientPorts, reservations;
+	private volatile Set<ClientIdentity> clients;
+	private volatile Set<Integer> reservations;
 	private volatile boolean running;
 	private int subsAmount;
 	private long ID;
@@ -43,10 +36,9 @@ public class OpenGame
 		 * Boolean - True if the client is playing single player mode
 		 * HandleRequest - The client's private handler during the game's session
 		 */
-		this.clients = new HashMap<Protocol, Entry<Boolean, HandleRequest>>();
 		this.ID = IDGenerator++;
 		this.game = game;
-		this.clientPorts = new HashSet<Integer>();
+		this.clients = new HashSet<ClientIdentity>();
 		this.reservations = reservations;
 		this.handler = new BoardGameHandler(game, chooseRandomGameAlgo());
 		this.controller = controller;
@@ -63,22 +55,21 @@ public class OpenGame
 	/**
 	 * Add a client to the game.
 	 * 
-	 * @param amountOfPlayers 
+	 * @param identity - The client's identity
 	 * @return true if after adding the client, the game can run.
 	 */
-	public boolean subscribe(Protocol prot, int amountOfPlayers) {
+	public boolean subscribe(ClientIdentity identity) {
 		//add a client if the game is not running yet
 		if (!canRun()) {
 			try {
 				//create client entry
-				HandleRequest handler = new HandleRequest(this, prot, clients.size());
-				boolean singlePlayer = amountOfPlayers == 2;
-				Entry<Boolean, HandleRequest> entry = new SimpleEntry<Boolean, HandleRequest>(singlePlayer, handler);
+				HandleRequest handler = new HandleRequest(this, identity.getProtocol(), clients.size());
+				identity.setHandler(handler);
+				int amount = identity.isSociopath() ? 2 : 1;
 				
 				//add as a subscriber
-				clients.put(prot, entry);
-				clientPorts.add(prot.getRemotePort());
-				subsAmount += amountOfPlayers;
+				clients.add(identity);
+				subsAmount += amount;
 			}
 			catch(IOException e) { return false; }
 		}
@@ -93,6 +84,7 @@ public class OpenGame
 	
 	/**
 	 * Remove a client from the game.
+	 * 
 	 * @param port - The port of the client to remove
 	 */
 	public void removeClient(int port) {
@@ -100,25 +92,33 @@ public class OpenGame
 		Protocol leavingClientProt = null;
 		boolean removed = false;
 		
-		for (Protocol clientProt : clients.keySet()) {
-			if (clientProt.getRemotePort() == port) {
-				leavingClientProt = clientProt;
-				
-				Entry<Boolean, HandleRequest> entry = clients.get(clientProt);
-				int amount = entry.getKey() ? 2 : 1;
-				
-				entry.getValue().kill(); //kill handler thread
-				clients.remove(clientProt);
-				clientPorts.remove(port);
-				subsAmount -= amount;
-				removed = true;
-				break;
-			}
+		ClientIdentity id = identify(port);
+		
+		if (id != null) {
+			leavingClientProt = id.getProtocol();
+			id.getHandler().kill();
+			int amount = id.isSociopath() ? 2 : 1;
+			subsAmount -= amount;
+			clients.remove(id);
+			removed = true;
 		}
 		
 		//terminate game - send all a message
 		if (couldRun && removed && running)
 			announceDisconnection(leavingClientProt);
+	}
+	
+	/**
+	 * Find the correct ClientIdentity object, compatible with the client's port number.
+	 * 
+	 * @param port - Port number of the client
+	 * @return the ClientIdentity object of the client.
+	 */
+	private ClientIdentity identify(int port) {
+		for (ClientIdentity id : clients)
+			if (id.getProtocol().getRemotePort() == port) return id;
+		
+		return null;
 	}
 	
 	/**
@@ -130,12 +130,14 @@ public class OpenGame
 	 * @param prot - The client's protocol
 	 * @return the client's private request handler.
 	 */
-	public HandleRequest getRequestHandler(Protocol prot) { return clients.get(prot).getValue(); }
+	public HandleRequest getRequestHandler(Protocol prot) {
+		return identify(prot.getRemotePort()).getHandler(); 
+	}
 	
 	/**
 	 * @return all of the game's client protocols.
 	 */
-	public Set<Protocol> getClients() { return clients.keySet(); }
+	public Set<ClientIdentity> getClients() { return clients; }
 	
 	/**
 	 * Get a set of reserved clients, that should come and join the game.
@@ -148,7 +150,7 @@ public class OpenGame
 	 * @param port - The port of the player to check
 	 * @return true if the player that own's that port is subscribed to this open game.
 	 */
-	public boolean hasClient(int port) { return clientPorts.contains(port); }
+	public boolean hasClient(int port) { return identify(port) != null; }
 	
 	/**
 	 * @return the game that's opened.
@@ -192,9 +194,18 @@ public class OpenGame
 	 * @param msg - The message to send all other participants
 	 */
 	public void notifyOthers(Protocol exclude, JSON msg) {
-		Set<Protocol> alternativeSet = new HashSet<Protocol>(clients.keySet());
+		Set<Protocol> alternativeSet = getAllProtocols();
 		alternativeSet.remove(exclude);
 		controller.notifySet(alternativeSet, msg);
+	}
+	
+	public Set<Protocol> getAllProtocols() {
+		Set<Protocol> set = new HashSet<Protocol>();
+		
+		for (ClientIdentity id : clients)
+			set.add(id.getProtocol());
+		
+		return set;
 	}
 	
 	/**
@@ -203,8 +214,8 @@ public class OpenGame
 	public void reissue() {
 		handler = new BoardGameHandler(game, chooseRandomGameAlgo());
 		
-		for (Protocol prot : clients.keySet())
-			clients.get(prot).getValue().reissueBoardHandler(handler);
+		for (ClientIdentity id : clients)
+			id.getHandler().reissueBoardHandler(handler);
 	}
 	
 	/**
@@ -223,8 +234,13 @@ public class OpenGame
 	
 	@Override
 	public String toString() {
-		return "[OPEN GAME #" + ID + ", "
-			 + "Name: " + game.name() + ", "
-			 + "Clients: " + clientPorts + "]";
+		String str = "[OPEN GAME #" + ID + ", "
+				   + " Game name: " + game.name() + ", "
+				   + " Clients:\n";
+		
+		for (ClientIdentity id : clients)
+			str = str.concat(id + "\n");
+		
+		return str.substring(0, str.length() - 1) + "]";
 	}
 }

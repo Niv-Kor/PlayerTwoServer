@@ -5,10 +5,11 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+
+import com.hit.control.ClientIdentity;
 import com.hit.control.Game;
 import com.hit.control.OpenGame;
 import com.hit.exception.UnknownIdException;
-import javaNK.util.networking.Protocol;
 
 public class GameService
 {
@@ -43,33 +44,33 @@ public class GameService
 	 * If a pending game already exists, inform it about with client's identity and subscribe him.  
 	 * 
 	 * @param controller - The main GameServerController object
-	 * @param clientProt - The protocol of the client
+	 * @param id - The identity of the client
 	 * @param game - The game the clients wants to play
 	 * @param reservations - The clients this incoming client wants to reserve spots for
 	 * @param reserved - True is the incoming client has a reserved spot in a pending game
-	 * @param singlePlayer - True if the incoming client wants to play against the computer
 	 * @return the OpenGame object the client was subscribed to.
 	 * @throws UnknownIdException when the game is not recognized by the server.
 	 */
-	public OpenGame startGame(GameServerController controller, Protocol clientProt,
-							  Game game, Set<Integer> reservations, boolean reserved,
-							  boolean singlePlayer) throws UnknownIdException {
+	public OpenGame startGame(GameServerController controller, ClientIdentity id,
+							  Game game, Set<Integer> reservations,
+							  boolean reserved) throws UnknownIdException {
 		
 		//client is trying to open two instances of the same game
-		OpenGame playedGame = playedGame(clientProt.getRemotePort(), game);
+		OpenGame playedGame = playedGame(id.getProtocol().getRemotePort(), game);
 		if (playedGame != null) return playedGame;
 		
 		//find a pending game for the client
-		if (!singlePlayer) {
+		if (!id.isSociopath()) {
 			for (OpenGame pendingGame : pendingGames.get(game)) {
 				//there's a game that's waiting for this client
-				boolean waitedForClient = reserved && pendingGame.getReservations().contains(clientProt.getRemotePort());
+				boolean inReservations = pendingGame.getReservations().contains(id.getProtocol().getRemotePort());
+				boolean waitedForClient = reserved && inReservations;
 				
 				//no one is waiting for this client - join a free for all game
 				boolean freeForAll = !reserved && pendingGame.getReservations().isEmpty();
 				
 				if (waitedForClient || freeForAll) {
-					pendingGame.subscribe(clientProt, 1);
+					pendingGame.subscribe(id);
 					
 					//if done waiting for clients remove from pending list
 					if (pendingGame.canRun()) pendingGames.get(game).remove(pendingGame);
@@ -80,8 +81,7 @@ public class GameService
 		
 		//open a new game for the client
 		OpenGame newGame = new OpenGame(controller, game, reservations);
-		int amountOfPlayers = singlePlayer ? 2 : 1;
-		newGame.subscribe(clientProt, amountOfPlayers);
+		newGame.subscribe(id);
 		openGames.get(game).add(newGame);
 		
 		//add the new game to the correct pending queue

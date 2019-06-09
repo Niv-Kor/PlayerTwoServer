@@ -3,6 +3,7 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.hit.control.ClientIdentity;
 import com.hit.control.Game;
 import com.hit.control.OpenGame;
 import com.hit.exception.UnknownIdException;
@@ -45,7 +46,11 @@ public class GameServerController
 			for (String reservedPort : reservationsArr)
 				reservations.add(Integer.parseInt(reservedPort));
 			
-			return gameService.startGame(this, clientProt, game, reservations, reserved, singlePlayer);
+			String name = msg.getString("name");
+			String avatarID = msg.getString("avatar");
+			ClientIdentity id = new ClientIdentity(name, avatarID, clientProt, null, singlePlayer);
+			
+			return gameService.startGame(this, id, game, reservations, reserved);
 		}
 		catch(UnknownIdException e) {
 			Logger.error(msg, "The game '"

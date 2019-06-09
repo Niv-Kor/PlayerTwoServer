@@ -5,9 +5,11 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.hit.control.ClientIdentity;
 import com.hit.control.Game;
 import com.hit.control.OpenGame;
 import com.hit.services.GameServerController;
+import com.hit.util.CLI;
 
 import javaNK.util.debugging.Logger;
 import javaNK.util.networking.JSON;
@@ -20,6 +22,7 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 {
 	private GameServerController controller;
 	private Set<Integer> clients;
+	private int backlog;
 	
 	/**
 	 * @param port - The port this server will listen to
@@ -27,23 +30,30 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 	 */
 	public Server(int port) throws IOException {
 		super(port, false);
+		
 		this.controller = new GameServerController(this);
 		this.clients = new HashSet<Integer>();
+		this.backlog = CLI.DEFAULT_BACKLOG;
 		start();
 	}
 	
 	@Override
 	public void propertyChange(PropertyChangeEvent e) {
-		if (e.getPropertyName().equals("running")) {
-			boolean running = (boolean) e.getNewValue();
-			pause(!running); //pause the thread
-			
-			//close all running games
-			if (!running) {
-				for (int clientPort : clients)
-					for (Game game : Game.values())
-						controller.closeGame(clientPort, game, false);
+		switch (e.getPropertyName()) {
+			case "running": {
+				boolean running = (boolean) e.getNewValue();
+				pause(!running); //pause the thread
+				
+				//close all running games
+				if (!running) {
+					for (int clientPort : clients)
+						for (Game game : Game.values())
+							controller.closeGame(clientPort, game, false);
+				}
+				
+				break;
 			}
+			case "backlog": backlog = (int) e.getNewValue(); break;
 		}
 	}
 
@@ -56,8 +66,9 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 	protected void notifyStart(OpenGame openGame) throws IOException {
 		boolean gaveTurn = false;
 		boolean firstTurnGiver;
+		Set<Protocol> allProtocols = openGame.getAllProtocols();
 		
-		for (Protocol clientProtocol : openGame.getClients()) {
+		for (Protocol clientProtocol : allProtocols) {
 			//give first turn to the first player in list
 			if (!gaveTurn) {
 				firstTurnGiver = true;
@@ -70,11 +81,14 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 			message.put("game", openGame.getGame().name());
 			message.put("turn", firstTurnGiver);
 			
+			for (ClientIdentity id : openGame.getClients())
+				if (id.getProtocol() != clientProtocol) //send only the OTHER clients' information
+					message.putJSON("other_player", id.generateJSONObject("-"));
+			
 			protocol.setRemotePort(clientProtocol.getRemotePort());
 			
 			//start handle request thread
 			openGame.getRequestHandler(clientProtocol).start();
-			
 			protocol.send(message);
 		}
 		
@@ -105,6 +119,16 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 				
 				//clients send their port with the message
 				int targetPort = msg.getInt("port");
+				protocol.setRemotePort(targetPort);
+				
+				//reached limit of clients
+				if (clients.size() >= backlog) {
+					JSON message = new JSON("new_client");
+					message.put("port", 0);
+					message.put("available", false);
+					protocol.send(message);
+					return;
+				}
 				
 				//check if client already playing
 				if (!controller.isAllowed(targetPort, game)) return;
@@ -116,14 +140,15 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 				OpenGame openGame = controller.addClient(newProt, game, msg);
 				
 				//notify client about his new target port
-				protocol.setRemotePort(targetPort);
 				JSON message = new JSON("new_client");
 				message.put("port", newProt.getLocalPort());
+				message.put("available", true);
 				protocol.send(message);
 				
 				ThreadUtility.delay(100);
+				Logger.print("A client from port " + newProt.getRemotePort()
+						   + " has subscribed to\n" + openGame + ".");
 				
-				Logger.print("A client from port " + newProt.getRemotePort() + " has subscribed to " + openGame + ".");
 				clients.add(targetPort);
 				
 				//inform all about the beginning of the game
@@ -145,9 +170,8 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 				int targetPort = msg.getInt("port");
 				
 				OpenGame openGame = controller.closeGame(targetPort, game, true);
-				Logger.print("A client from port " + targetPort + " has left " + openGame + ".");
+				Logger.print("A client from port " + targetPort + " has left\n" + openGame + ".");
 				clients.remove(targetPort);
-				
 			}
 		});
 		
