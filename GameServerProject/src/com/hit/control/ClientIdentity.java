@@ -1,8 +1,8 @@
 package com.hit.control;
 import com.hit.server.HandleRequest;
-
-import javaNK.util.networking.JSON;
-import javaNK.util.networking.Protocol;
+import javaNK.util.communication.JSON;
+import javaNK.util.communication.NetworkInformation;
+import javaNK.util.communication.Protocol;
 
 public class ClientIdentity
 {
@@ -28,15 +28,15 @@ public class ClientIdentity
 	}
 	
 	@Override
-	public boolean equals(Object obj) {
-		ClientIdentity other;
-		
-		if (!(obj instanceof ClientIdentity)) return false;
-		else {
-			other = (ClientIdentity) obj;
-			return name.equals(other.name)
-				&& protocol.getRemotePort() == other.getProtocol().getRemotePort();
+	public boolean equals(Object other) {
+		try {
+			ClientIdentity otherId = (ClientIdentity) other;
+			NetworkInformation thisInfo = protocol.getRemoteNetworkInformation();
+			NetworkInformation otherInfo = otherId.getProtocol().getRemoteNetworkInformation();
+			
+			return name.equals(otherId.name) && thisInfo.equals(otherInfo);
 		}
+		catch (ClassCastException ex) { return false; }
 	}
 	
 	/**
@@ -95,6 +95,7 @@ public class ClientIdentity
 	
 	@Override
 	public String toString() {
-		return "[name: " + name + ", avatar: " + avatarID + ", port: " + protocol.getRemotePort() + "]";
+		NetworkInformation clientInfo = protocol.getRemoteNetworkInformation();
+		return "[Name: " + name + ", Avatar: " + avatarID + ", Client: " + clientInfo + "]";
 	}
 }

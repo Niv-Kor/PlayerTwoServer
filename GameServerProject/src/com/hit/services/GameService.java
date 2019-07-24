@@ -10,6 +10,7 @@ import com.hit.control.ClientIdentity;
 import com.hit.control.Game;
 import com.hit.control.OpenGame;
 import com.hit.exception.UnknownIdException;
+import javaNK.util.communication.NetworkInformation;
 
 public class GameService
 {
@@ -52,18 +53,19 @@ public class GameService
 	 * @throws UnknownIdException when the game is not recognized by the server.
 	 */
 	public OpenGame startGame(GameServerController controller, ClientIdentity id,
-							  Game game, Set<Integer> reservations,
+							  Game game, Set<NetworkInformation> reservations,
 							  boolean reserved) throws UnknownIdException {
 		
 		//client is trying to open two instances of the same game
-		OpenGame playedGame = playedGame(id.getProtocol().getRemotePort(), game);
+		OpenGame playedGame = getPlayedGame(id.getProtocol().getRemoteNetworkInformation(), game);
 		if (playedGame != null) return playedGame;
 		
 		//find a pending game for the client
 		if (!id.isSociopath()) {
 			for (OpenGame pendingGame : pendingGames.get(game)) {
 				//there's a game that's waiting for this client
-				boolean inReservations = pendingGame.getReservations().contains(id.getProtocol().getRemotePort());
+				Set<NetworkInformation> pendingReservations = pendingGame.getReservations();
+				boolean inReservations = pendingReservations.contains(id.getProtocol().getRemoteNetworkInformation());
 				boolean waitedForClient = reserved && inReservations;
 				
 				//no one is waiting for this client - join a free for all game
@@ -94,17 +96,17 @@ public class GameService
 	 * The game will not be closed if it's still pending for other subscribers,
 	 * and will be closed for all the players if it had already started.
 	 * 
-	 * @param clientPort - The port of the client that's closing the game
+	 * @param clientInfo - The network information of the client that's closing the game
 	 * @param game - The game to close
 	 * @return the OpenGame object of the game that got closed (or just removed a subscriber).
 	 */
-	public OpenGame closeGame(int clientPort, Game game) {
-		OpenGame playedGame = playedGame(clientPort, game);
+	public OpenGame closeGame(NetworkInformation clientInfo, Game game) {
+		OpenGame playedGame = getPlayedGame(clientInfo, game);
 		Queue<OpenGame> pendingRemoval = new LinkedList<OpenGame>();
 		
 		//remove the client from the game he waited for (if needed)
 		for (OpenGame pendingGame : pendingGames.get(game)) {
-			pendingGame.removeClient(clientPort);
+			pendingGame.removeClient(clientInfo);
 			
 			//delete open game if no clients are subscribed
 			if (pendingGame.getClients().isEmpty()) pendingRemoval.add(pendingGame);
@@ -118,7 +120,7 @@ public class GameService
 		
 		//close the game that the client was playing
 		if (playedGame != null) {
-			playedGame.removeClient(clientPort);
+			playedGame.removeClient(clientInfo);
 			
 			//remove game if it contains no clients
 			if (playedGame.getClients().isEmpty())
@@ -131,12 +133,12 @@ public class GameService
 	/**
 	 * Restart a game for a client
 	 * 
-	 * @param clientPort - The client that asked for the game to be restarted
+	 * @param clientInfo - The network information of ehe client that asked for the game to be restarted
 	 * @param game - The game to restart
 	 * @return the game that has been restarted, or null if the game doesn't exist from the first place.
 	 */
-	public OpenGame reissue(int clientPort, Game game) {
-		OpenGame openGame = playedGame(clientPort, game);
+	public OpenGame reissue(NetworkInformation clientInfo, Game game) {
+		OpenGame openGame = getPlayedGame(clientInfo, game);
 		if (openGame != null) openGame.reissue();
 		return openGame;
 	}
@@ -144,24 +146,24 @@ public class GameService
 	/**
 	 * Check if a client is playing a specific game right now.
 	 * 
-	 * @param clientPort - The client's port that needs to be checked
+	 * @param clientInfo - The network information of the client's port that needs to be checked
 	 * @param game - The game that the client is playing
 	 * @return true if the client is playing that game right now.
 	 */
-	public boolean isPlaying(int clientPort, Game game) {
-		return playedGame(clientPort, game) != null;
+	public boolean isPlaying(NetworkInformation clientInfo, Game game) {
+		return getPlayedGame(clientInfo, game) != null;
 	}
 	
 	/**
 	 * Get an open game that's played by a specific client.
 	 * 
-	 * @param clientPort - The port of the client that's playing the game
+	 * @param clientInfo - The network information of the port of the client that's playing the game
 	 * @param game - The game that the client is playing
 	 * @return the open game that the client is now playing 
 	 */
-	public OpenGame playedGame(int clientPort, Game game) {
+	public OpenGame getPlayedGame(NetworkInformation clientInfo, Game game) {
 		for (OpenGame openGame : openGames.get(game))
-			if (openGame.hasClient(clientPort)) return openGame;
+			if (openGame.hasClient(clientInfo)) return openGame;
 		
 		return null;
 	}

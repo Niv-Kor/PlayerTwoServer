@@ -2,17 +2,16 @@ package com.hit.services;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
-
 import com.hit.control.ClientIdentity;
 import com.hit.control.Game;
 import com.hit.control.OpenGame;
 import com.hit.exception.UnknownIdException;
 import com.hit.server.Server;
-
 import game_algo.IGameAlgo.GameState;
+import javaNK.util.communication.JSON;
+import javaNK.util.communication.NetworkInformation;
+import javaNK.util.communication.Protocol;
 import javaNK.util.debugging.Logger;
-import javaNK.util.networking.JSON;
-import javaNK.util.networking.Protocol;
 
 public class GameServerController
 {
@@ -39,12 +38,12 @@ public class GameServerController
 		try {
 			boolean reserved = msg.getBoolean("reserved");
 			boolean singlePlayer = msg.getBoolean("single_player");
-			Set<Integer> reservations = new HashSet<Integer>();
+			Set<NetworkInformation> reservations = new HashSet<NetworkInformation>();
 			
 			//add the reserved ports to the reservations set (if they exist)
-			String[] reservationsArr = msg.getStringArray("reservations");
-			for (String reservedPort : reservationsArr)
-				reservations.add(Integer.parseInt(reservedPort));
+			JSON[] reservationsArr = msg.getJSONArray("reservations");
+			for (JSON reservedClient : reservationsArr)
+				reservations.add(new NetworkInformation(reservedClient));
 			
 			String name = msg.getString("name");
 			String avatarID = msg.getString("avatar");
@@ -52,7 +51,7 @@ public class GameServerController
 			
 			return gameService.startGame(this, id, game, reservations, reserved);
 		}
-		catch(UnknownIdException e) {
+		catch(IOException | UnknownIdException e) {
 			Logger.error(msg, "The game '"
 							+ Game.valueOf(msg.getString("game")).name() + "' "
 							+ "is not recognized by the server.");
@@ -67,13 +66,13 @@ public class GameServerController
 	 * and will be closed for all the players if it had already started.
 	 * If a game has been closed unexpectedly, all players will be notified.
 	 * 
-	 * @param clientPort - The port of the client that's closing the game
+	 * @param clientInfo - The network information of the client that's closing the game
 	 * @param game - The game to close
 	 * @param expected - False if the end of the game is unexpected (players will be notified)
 	 * @return the OpenGame object of the game that got closed (or just removed a subscriber).
 	 */
-	public OpenGame closeGame(int clientPort, Game game, boolean expected) {
-		OpenGame closedGame = gameService.playedGame(clientPort, game);
+	public OpenGame closeGame(NetworkInformation clientInfo, Game game, boolean expected) {
+		OpenGame closedGame = gameService.getPlayedGame(clientInfo, game);
 		
 		//notify all players about unexpected end of the game
 		if (!expected && closedGame != null) {
@@ -83,18 +82,18 @@ public class GameServerController
 			closedGame.notifyAll(unexpecetedEnd);
 		}
 		
-		return gameService.closeGame(clientPort, game);
+		return gameService.closeGame(clientInfo, game);
 	}
 	
 	/**
 	 * Restart a game for a client
 	 * 
-	 * @param clientPort - The client that asked for the game to be restarted
+	 * @param clientInfo - The network information of the client that asked for the game to be restarted
 	 * @param game - The game to restart
 	 * @return the game that has been restarted, or null if the game doesn't exist from the first place.
 	 */
-	public OpenGame restartGame(int clientPort, Game game) {
-		return gameService.reissue(clientPort, game);
+	public OpenGame restartGame(NetworkInformation clientInfo, Game game) {
+		return gameService.reissue(clientInfo, game);
 	}
 	
 	/**
@@ -107,7 +106,7 @@ public class GameServerController
 		for (Protocol prot : protocols) {
 			try { server.notify(prot, msg); }
 			catch(IOException e) {
-				Logger.error(msg, "Something went wrong with port " + prot.getRemotePort() + ".");
+				Logger.error(msg, "Could not contact the client " + prot.getRemoteNetworkInformation() + ".");
 			}
 		}
 	}
@@ -115,11 +114,11 @@ public class GameServerController
 	/**
 	 * Verify that a client is not already playing a specific game.
 	 * 
-	 * @param clientPort - The port of the client to check
+	 * @param clientInfo - The network information of the client to check
 	 * @param game - The game to check that the client isn't playing
 	 * @return true if the client is not playing that game.
 	 */
-	public boolean isAllowed(int clientPort, Game game) {
-		return !gameService.isPlaying(clientPort, game);
+	public boolean isAllowed(NetworkInformation clientInfo, Game game) {
+		return !gameService.isPlaying(clientInfo, game);
 	}
 }

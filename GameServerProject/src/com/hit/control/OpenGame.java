@@ -7,9 +7,10 @@ import com.hit.server.HandleRequest;
 import com.hit.services.GameServerController;
 import game_algo.IGameAlgo;
 import game_algo.IGameAlgo.GameState;
+import javaNK.util.communication.JSON;
+import javaNK.util.communication.NetworkInformation;
+import javaNK.util.communication.Protocol;
 import javaNK.util.math.RNG;
-import javaNK.util.networking.JSON;
-import javaNK.util.networking.Protocol;
 
 public class OpenGame
 {
@@ -18,7 +19,7 @@ public class OpenGame
 	private BoardGameHandler handler;
 	private GameServerController controller;
 	private volatile Set<ClientIdentity> clients;
-	private volatile Set<Integer> reservations;
+	private volatile Set<NetworkInformation> reservations;
 	private volatile boolean running;
 	private int subsAmount;
 	private long ID;
@@ -28,14 +29,11 @@ public class OpenGame
 	 * @param reservations - A set of reserved clients for this game
 	 * @throws UnknownIdException when the game's not recognized.
 	 */
-	public OpenGame(GameServerController controller, Game game, Set<Integer> reservations) throws UnknownIdException {
+	public OpenGame(GameServerController controller, Game game,
+					Set<NetworkInformation> reservations) throws UnknownIdException {
+		
 		if (game == null) throw new UnknownIdException();
 		
-		/*
-		 * Protocol - The client's private protocol
-		 * Boolean - True if the client is playing single player mode
-		 * HandleRequest - The client's private handler during the game's session
-		 */
 		this.ID = IDGenerator++;
 		this.game = game;
 		this.clients = new HashSet<ClientIdentity>();
@@ -85,14 +83,14 @@ public class OpenGame
 	/**
 	 * Remove a client from the game.
 	 * 
-	 * @param port - The port of the client to remove
+	 * @param clientInfo - The network information of the client to remove
 	 */
-	public void removeClient(int port) {
+	public void removeClient(NetworkInformation clientInfo) {
 		boolean couldRun = canRun(); //see if the game could run before the removal
 		Protocol leavingClientProt = null;
 		boolean removed = false;
 		
-		ClientIdentity id = identify(port);
+		ClientIdentity id = identify(clientInfo);
 		
 		if (id != null) {
 			leavingClientProt = id.getProtocol();
@@ -111,12 +109,12 @@ public class OpenGame
 	/**
 	 * Find the correct ClientIdentity object, compatible with the client's port number.
 	 * 
-	 * @param port - Port number of the client
+	 * @param clientInfo - The network information of the client
 	 * @return the ClientIdentity object of the client.
 	 */
-	private ClientIdentity identify(int port) {
+	private ClientIdentity identify(NetworkInformation clientInfo) {
 		for (ClientIdentity id : clients)
-			if (id.getProtocol().getRemotePort() == port) return id;
+			if (id.getProtocol().getRemoteNetworkInformation().equals(clientInfo)) return id;
 		
 		return null;
 	}
@@ -131,7 +129,7 @@ public class OpenGame
 	 * @return the client's private request handler.
 	 */
 	public HandleRequest getRequestHandler(Protocol prot) {
-		return identify(prot.getRemotePort()).getHandler(); 
+		return identify(prot.getRemoteNetworkInformation()).getHandler(); 
 	}
 	
 	/**
@@ -144,13 +142,13 @@ public class OpenGame
 	 * 
 	 * @return a set of the reserved clients.
 	 */
-	public Set<Integer> getReservations() { return reservations; }
+	public Set<NetworkInformation> getReservations() { return reservations; }
 	
 	/**
-	 * @param port - The port of the player to check
+	 * @param clientInfo - The network information of the client to check
 	 * @return true if the player that own's that port is subscribed to this open game.
 	 */
-	public boolean hasClient(int port) { return identify(port) != null; }
+	public boolean hasClient(NetworkInformation clientInfo) { return identify(clientInfo) != null; }
 	
 	/**
 	 * @return the game that's opened.
@@ -234,9 +232,9 @@ public class OpenGame
 	
 	@Override
 	public String toString() {
-		String str = "[OPEN GAME #" + ID + ", "
-				   + " Game name: " + game.name() + ", "
-				   + " Clients:\n";
+		String str = "[Open game serial number: " + ID + ", "
+				   + "Name: " + game.name() + ", "
+				   + "Clients:\n";
 		
 		for (ClientIdentity id : clients)
 			str = str.concat(id + "\n");

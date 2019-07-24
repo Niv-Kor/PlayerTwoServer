@@ -1,25 +1,26 @@
 package com.hit.server;
 import com.hit.util.CLI;
-
+import javaNK.util.communication.NetworkInformation;
 import javaNK.util.debugging.Logger;
-import javaNK.util.networking.PortGenerator;
+import server_information.ServerData;
 
 public class GameServerDriver
 {
 	public static void main(String[] args) {
+		NetworkInformation serverNetwork = null;
+		
 		try {
-			//initiateS utility services
+			//initiate utility services
 			Logger.configName("Server");
 			Logger.configErrorStream(System.err);
-			PortGenerator.allocate("server_port", 5081);
+			serverNetwork = new NetworkInformation(ServerData.PORT, ServerData.IP_ADDRESS);
+			System.err.println("Network Information: " + serverNetwork);
 			
 			CLI cli = new CLI(System.in, System.out);
-			Server server = new Server(PortGenerator.getAllocated("server_port"));
+			Server server = new Server(serverNetwork);
 			cli.addPropertyChangeListener(server);
 			new Thread(cli).start();
 		}
-		catch(Exception e) {
-			Logger.error(e);
-		}
+		catch (Exception ex) { Logger.error(ex); }
 	}
 }

@@ -4,35 +4,34 @@ import java.beans.PropertyChangeListener;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
-
 import com.hit.control.ClientIdentity;
 import com.hit.control.Game;
 import com.hit.control.OpenGame;
 import com.hit.services.GameServerController;
 import com.hit.util.CLI;
-
+import javaNK.util.communication.JSON;
+import javaNK.util.communication.NetworkInformation;
+import javaNK.util.communication.Protocol;
+import javaNK.util.communication.ResponseCase;
+import javaNK.util.communication.ResponseEngine;
 import javaNK.util.debugging.Logger;
-import javaNK.util.networking.JSON;
-import javaNK.util.networking.Protocol;
-import javaNK.util.networking.ResponseCase;
-import javaNK.util.networking.ResponseEngine;
 import javaNK.util.threads.ThreadUtility;
 
 public class Server extends ResponseEngine implements PropertyChangeListener
 {
 	private GameServerController controller;
-	private Set<Integer> clients;
+	private Set<NetworkInformation> clients;
 	private int backlog;
 	
 	/**
-	 * @param port - The port this server will listen to
+	 * @param serverNetwork - The network information of the server
 	 * @throws IOException when the port is unavailable.
 	 */
-	public Server(int port) throws IOException {
-		super(port, false);
+	public Server(NetworkInformation serverNetwork) throws IOException {
+		super(serverNetwork, false);
 		
 		this.controller = new GameServerController(this);
-		this.clients = new HashSet<Integer>();
+		this.clients = new HashSet<NetworkInformation>();
 		this.backlog = CLI.DEFAULT_BACKLOG;
 		start();
 	}
@@ -46,9 +45,9 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 				
 				//close all running games
 				if (!running) {
-					for (int clientPort : clients)
+					for (NetworkInformation clientInfo : clients)
 						for (Game game : Game.values())
-							controller.closeGame(clientPort, game, false);
+							controller.closeGame(clientInfo, game, false);
 				}
 				
 				break;
@@ -83,9 +82,9 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 			
 			for (ClientIdentity id : openGame.getClients())
 				if (id.getProtocol() != clientProtocol) //send only the OTHER clients' information
-					message.putJSON("other_player", id.generateJSONObject("-"));
+					message.put("other_player", id.generateJSONObject("-"));
 			
-			protocol.setRemotePort(clientProtocol.getRemotePort());
+			protocol.setRemoteNetworkInformation(clientProtocol.getRemoteNetworkInformation());
 			
 			//start handle request thread
 			openGame.getRequestHandler(clientProtocol).start();
@@ -102,24 +101,21 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 	 * @throws IOException when the client's protocol is unavailable
 	 */
 	public void notify(Protocol prot, JSON msg) throws IOException {
-		protocol.setRemotePort(prot.getRemotePort());
-		protocol.send(msg);
+		protocol.send(msg, prot.getRemoteNetworkInformation());
 	}
 	
 	protected void initCases() {
 		//new client service
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "new_client"; }
+			public String getCaseName() { return "new_client"; }
 			
 			@Override
 			public void respond(JSON msg) throws Exception {
-				//the game the client is referring to
+				//the game the client is referring to, and his network information
 				Game game = Game.valueOf(msg.getString("game"));
-				
-				//clients send their port with the message
-				int targetPort = msg.getInt("port");
-				protocol.setRemotePort(targetPort);
+				NetworkInformation clientInfo = new NetworkInformation(msg.getJSON("client"));
+				protocol.setRemoteNetworkInformation(clientInfo);
 				
 				//reached limit of clients
 				if (clients.size() >= backlog) {
@@ -131,25 +127,25 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 				}
 				
 				//check if client already playing
-				if (!controller.isAllowed(targetPort, game)) return;
+				if (!controller.isAllowed(clientInfo, game)) return;
 				
 				//create a new protocol that listens to the new client
 				Protocol newProt = new Protocol();
-				newProt.setRemotePort(targetPort);
+				newProt.setRemoteNetworkInformation(clientInfo);
 				
 				OpenGame openGame = controller.addClient(newProt, game, msg);
 				
 				//notify client about his new target port
 				JSON message = new JSON("new_client");
-				message.put("port", newProt.getLocalPort());
 				message.put("available", true);
+				message.merge(newProt.getLocalNetworkInformation().composeJSON());
 				protocol.send(message);
 				
 				ThreadUtility.delay(100);
-				Logger.print("A client from port " + newProt.getRemotePort()
+				Logger.print("The client " + newProt.getRemoteNetworkInformation()
 						   + " has subscribed to\n" + openGame + ".");
 				
-				clients.add(targetPort);
+				clients.add(clientInfo);
 				
 				//inform all about the beginning of the game
 				if (openGame.canRun()) notifyStart(openGame);
@@ -159,36 +155,32 @@ public class Server extends ResponseEngine implements PropertyChangeListener
 		//leaving client service
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "leaving_client"; }
+			public String getCaseName() { return "leaving_client"; }
 			
 			@Override
 			public void respond(JSON msg) throws Exception {
-				//the game the client is referring to
+				//the game the client is referring to, and his network information
 				Game game = Game.valueOf(msg.getString("game"));
+				NetworkInformation clientInfo = new NetworkInformation(msg.getJSON("client"));
 				
-				//clients send their port with the message
-				int targetPort = msg.getInt("port");
-				
-				OpenGame openGame = controller.closeGame(targetPort, game, true);
-				Logger.print("A client from port " + targetPort + " has left\n" + openGame + ".");
-				clients.remove(targetPort);
+				OpenGame openGame = controller.closeGame(clientInfo, game, true);
+				Logger.print("The client " + clientInfo + " has left\n" + openGame + ".");
+				clients.remove(clientInfo);
 			}
 		});
 		
 		//restart game for client service
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "happy_client"; }
+			public String getCaseName() { return "happy_client"; }
 			
 			@Override
 			public void respond(JSON msg) throws Exception {
-				//the game the client is referring to
+				//the game the client is referring to, and his network information
 				Game game = Game.valueOf(msg.getString("game"));
+				NetworkInformation clientInfo = new NetworkInformation(msg.getJSON("client"));
 				
-				//clients send their port with the message
-				int targetPort = msg.getInt("port");
-				
-				OpenGame openGame = controller.restartGame(targetPort, game);
+				OpenGame openGame = controller.restartGame(clientInfo, game);
 				
 				//inform all about the beginning of the game
 				if (openGame.canRun()) notifyStart(openGame);

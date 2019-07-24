@@ -5,10 +5,10 @@ import com.hit.control.Game;
 import com.hit.control.OpenGame;
 import game_algo.GameBoard.GameMove;
 import game_algo.IGameAlgo.GameState;
-import javaNK.util.networking.JSON;
-import javaNK.util.networking.Protocol;
-import javaNK.util.networking.ResponseCase;
-import javaNK.util.networking.ResponseEngine;
+import javaNK.util.communication.JSON;
+import javaNK.util.communication.Protocol;
+import javaNK.util.communication.ResponseCase;
+import javaNK.util.communication.ResponseEngine;
 
 public class HandleRequest extends ResponseEngine
 {
@@ -44,15 +44,19 @@ public class HandleRequest extends ResponseEngine
 
 		//notify the client about the game state
 		if (state != GameState.IN_PROGRESS) {
-			openGame.pauseGame(true);
-			
-			JSON message = new JSON("end_game");
-			message.put("game", game.name());
-			message.put("state", state.name());
-			protocol.send(message);
+			endGame(state);
 			return true;
 		}
 		else return false;
+	}
+	
+	private void endGame(GameState state) throws IOException {
+		openGame.pauseGame(true);
+		
+		JSON message = new JSON("end_game");
+		message.put("game", game.name());
+		message.put("state", state.name());
+		protocol.send(message);
 	}
 	
 	@Override
@@ -60,7 +64,7 @@ public class HandleRequest extends ResponseEngine
 		//get player's sign
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "player_sign"; }
+			public String getCaseName() { return "player_sign"; }
 
 			@Override
 			public void respond(JSON msg) throws Exception {
@@ -73,7 +77,7 @@ public class HandleRequest extends ResponseEngine
 		//get player 2's sign
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "player2_sign"; }
+			public String getCaseName() { return "player2_sign"; }
 
 			@Override
 			public void respond(JSON msg) throws Exception {
@@ -86,7 +90,7 @@ public class HandleRequest extends ResponseEngine
 		//make a player move
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "player_move"; }
+			public String getCaseName() { return "player_move"; }
 
 			@Override
 			public void respond(JSON msg) throws Exception {
@@ -111,7 +115,7 @@ public class HandleRequest extends ResponseEngine
 		//make a computer move
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "computer_move"; }
+			public String getCaseName() { return "computer_move"; }
 
 			@Override
 			public void respond(JSON msg) throws Exception {
@@ -131,7 +135,7 @@ public class HandleRequest extends ResponseEngine
 		//place the player's sign on the board manually
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "place_player"; }
+			public String getCaseName() { return "place_player"; }
 			
 			@Override
 			public void respond(JSON msg) throws Exception {
@@ -149,7 +153,7 @@ public class HandleRequest extends ResponseEngine
 		//place the computer's sign on the board manually
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "place_computer"; }
+			public String getCaseName() { return "place_computer"; }
 
 			@Override
 			public void respond(JSON msg) throws Exception {
@@ -162,7 +166,7 @@ public class HandleRequest extends ResponseEngine
 		//make a random player move
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "player_random"; }
+			public String getCaseName() { return "player_random"; }
 
 			@Override
 			public void respond(JSON msg) throws Exception {
@@ -180,7 +184,7 @@ public class HandleRequest extends ResponseEngine
 		//make a random computer move
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "computer_random"; }
+			public String getCaseName() { return "computer_random"; }
 			
 			@Override
 			public void respond(JSON msg) throws Exception {
@@ -198,7 +202,7 @@ public class HandleRequest extends ResponseEngine
 		//check that the game is over
 		addCase(new ResponseCase() {
 			@Override
-			public String getType() { return "is_over"; }
+			public String getCaseName() { return "is_over"; }
 
 			@Override
 			public void respond(JSON msg) throws Exception {
@@ -209,13 +213,24 @@ public class HandleRequest extends ResponseEngine
 				protocol.send(message);
 			}
 		});
+		
+		//force the player's loss in the game
+		addCase(new ResponseCase() {
+			@Override
+			public String getCaseName() { return "force_loss"; }
+			
+			@Override
+			public void respond(JSON msg) throws Exception {
+				endGame(GameState.PLAYER_LOST);
+			}
+		});
 	}
 	
 	@Override
 	protected void targetDied() {
 		super.targetDied();
 		kill();
-		openGame.removeClient(protocol.getRemotePort());
+		openGame.removeClient(protocol.getRemoteNetworkInformation());
 		protocol.close();
 	}
 	
